@@ -32,11 +32,18 @@ items:
     source:
       type: "Git"
       git:
-        uri: "https://github.com/kenwilli/openshift_homework/tree/master/openshift-tasks"
+        uri: "https://github.com/kenwilli/openshift_homework"
     strategy:
       type: "JenkinsPipeline"
       jenkinsPipelineStrategy:
-        jenkinsfilePath: Jenkinsfile
+        jenkinsfilePath: openshift-tasks/Jenkinsfile
+        env:
+        - name: "GUID"
+          value: "820a"
+          name: "REPO"
+          value: "https://github.com/kenwilli/openshift_homework.git"
+          name: "CLUSTER"
+          value: "na311.openshift.opentlc.com"
 kind: List
 metadata: []" | oc create -f - -n ${GUID}-jenkins
 
