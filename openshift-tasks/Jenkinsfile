@@ -32,10 +32,10 @@ podTemplate(
       // Extract version from the pom.xml
       def version = getVersionFromPom("pom.xml")
 
-      // TBD Set the tag for the development image: version + build number
-      def devTag  = ""
+      //Set the tag for the development image: version + build number
+      def devTag  = "${version}-" + currentBuild.number
       // Set the tag for the production image: version
-      def prodTag = ""
+      def prodTag = "${version}"
 
       // Using Maven build the war file
       // Do not run tests in this step
@@ -43,36 +43,51 @@ podTemplate(
         echo "Building version ${devTag}"
 
         // TBD: Execute Maven Build
+        sh "${mvnCmd} clean package -DskipTests=true"
       }
 
       // TBD: The next two stages should run in parallel
+      stage("Unit Tests and Sonar - Parallel"){
+        parallel{
+          // Using Maven run the unit tests
+          stage('Unit Tests') {
+            echo "Running Unit Tests"
 
-      // Using Maven run the unit tests
-      stage('Unit Tests') {
-        echo "Running Unit Tests"
+            // Execute Unit Tests
+            sh "${mvnCmd} test"
+          }
 
-        // TBD: Execute Unit Tests
+          // Using Maven to call SonarQube for Code Analysis
+          stage('Code Analysis') {
+            echo "Running Code Analysis"
+ 
+            // Execute Sonarqube Tests
+            sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000 
+            -Dsonar.projectName=${JOB_BASE_NAME} -Dsonar.projectVersion=${devTag}"
+          }
+        }
       }
-
-      // Using Maven to call SonarQube for Code Analysis
-      stage('Code Analysis') {
-        echo "Running Code Analysis"
-
-        // TBD: Execute Sonarqube Tests
-      }
-
       // Publish the built war file to Nexus
       stage('Publish to Nexus') {
         echo "Publish to Nexus"
 
-        // TBD: Publish to Nexus
+        // Publish to Nexus
+        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.gpte-hw-cicd.svc.cluster.local:8081/repository/all-maven-public"
       }
 
       // Build the OpenShift Image in OpenShift and tag it.
       stage('Build and Tag OpenShift Image') {
         echo "Building OpenShift container image tasks:${devTag}"
 
-        // TBD: Build Image, tag Image
+        // Build Image, tag Image
+        script{
+          openshift.withCluster(){
+            openshift.withProject("820a-jenkins"){
+              openshift.selector("bc", "tasks").startBuild("--from-file=http://nexus3.${gpte-hw-cicd-nexus.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/tasks/${version}/tasks-${version}.war", "--wait=true")
+              openshift.tag("tasks:latest", "tasks:${devTag}")
+            }
+          }
+        }
       }
 
       // Deploy the built image to the Development Environment.
