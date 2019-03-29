@@ -137,7 +137,7 @@ podTemplate(
           }
         }
       }
-
+      /*
       // Blue/Green Deployment into Production
       // -------------------------------------
       def destApp   = "tasks-green"
@@ -191,7 +191,7 @@ podTemplate(
             }
           }
         }
-      }
+      }*/
     }
   }
 }
