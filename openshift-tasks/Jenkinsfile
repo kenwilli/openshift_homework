@@ -6,7 +6,7 @@ podTemplate(
   containers: [
     containerTemplate(
       name: "jnlp",
-      image: "docker-registry.default.svc:5000/${env.GUID}-jenkins/jenkins-agent-appdev",
+      image: "docker-registry.default.svc:5000/${GUID}-jenkins/jenkins-agent-appdev",
       resourceRequestMemory: "1Gi",
       resourceLimitMemory: "2Gi",
       resourceRequestCpu: "1",
@@ -33,20 +33,23 @@ podTemplate(
       def version = getVersionFromPom("pom.xml")
 
       //Set the tag for the development image: version + build number
-      def devTag  = "${version}-" + currentBuild.number
+      def devTag  = "${version}-${currentBuild.number}"
       // Set the tag for the production image: version
       def prodTag = "${version}"
+      
+      def devProject = "${env.GUID}-tasks-dev"
+      def prodProject = "${env.GUID}-tasks-prod}"
 
       // Using Maven build the war file
       // Do not run tests in this step
       stage('Build war') {
         echo "Building version ${devTag}"
 
-        // TBD: Execute Maven Build
+        // Execute Maven Build
         sh "${mvnCmd} clean package -DskipTests=true"
       }
 
-      // TBD: The next two stages should run in parallel
+      // The next two stages should run in parallel
       stage("Unit Tests and Sonar - Parallel"){
         parallel{
           // Using Maven run the unit tests
@@ -71,7 +74,7 @@ podTemplate(
         echo "Publish to Nexus"
 
         // Publish to Nexus
-        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.gpte-hw-cicd.svc.cluster.local:8081/repository/all-maven-public"
+        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.gpte-hw-cicd.svc.cluster.local:8081/repository/releases"
       }
 
       // Build the OpenShift Image in OpenShift and tag it.
@@ -81,8 +84,8 @@ podTemplate(
         // Build Image, tag Image
         script{
           openshift.withCluster(){
-            openshift.withProject("820a-tasks-dev"){
-              openshift.selector("bc", "tasks").startBuild("--from-file=http://nexus3.gpte-hw-cicd-nexus.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/tasks/${version}/tasks-${version}.war", "--wait=true")
+            openshift.withProject("${devProject}"){
+              openshift.selector("bc", "tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
               openshift.tag("tasks:latest", "tasks:${devTag}")
             }
           }
@@ -99,8 +102,8 @@ podTemplate(
             //      Set Image, Set VERSION
             //      Make sure the application is running and ready before proceeding
             openshift.withCluster(){
-              openshift.withProjects("820a-tasks-dev"){
-                openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/820a-tasks-dev/tasks:${devTag}")
+              openshift.withProjects("${devProject}"){
+                openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/${devProject}/tasks:${devTag}")
                 openshift.selector('configmap', 'tasks-config').delete()
                 def configmap = openshift.create('configmap', 'tasks-config', '--from-file=./configuration/application-users.properties', '--from-file=./configuration/application-roles.properties')
                 openshift.selector("dc", "tasks").rollout().latest()
@@ -126,18 +129,18 @@ podTemplate(
           echo "Copy image to Nexus container registry"
           script{
             // Copy image to Nexus container registry
-            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:redhat docker://docker-registry.default.svc.cluster.local:5000/820a-tasks-dev/tasks:${devTag} docker://nexus3-registry.gpte-hw-cicd-nexus.svc.cluster.local:5000/tasks:${devtag}"
+            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:redhat docker://docker-registry.default.svc.cluster.local:5000/${devProject}/tasks:${devTag} docker://nexus3-registry.gpte-hw-cicd-nexus.svc.cluster.local:5000/tasks:${devtag}"
             // Tag the built image with the production tag.
             openshift.withCluster(){
               openshift.withProject("820a-tasks-prod"){
-                openshift.tag("820a-tasks-dev/tasks:${devTag}", "820a-tasks-dev/tasks:${prodTag}")    
+                openshift.tag("${devProject}/tasks:${devTag}", "${devProject}/tasks:${prodTag}")    
                               
               }
             }
           }
         }
       }
-      /*
+      
       // Blue/Green Deployment into Production
       // -------------------------------------
       def destApp   = "tasks-green"
@@ -152,7 +155,7 @@ podTemplate(
           echo "Blue Green Deployment"
           script{
             openshift.withCluster(){
-              openshift.withProject("820a-tasks-prod"){
+              openshift.withProject("${prodProject}"){
                 activeApp= openshift.selector("route", "tasks").object().spec.to.name
                 if(activeApp == "tasks-green"){
                   destApp="tasks-blue"
@@ -160,7 +163,7 @@ podTemplate(
                 echo "Active Application:      " + activeApp
                 echo "Destination Application: " + destApp
                 def dc = openshift.selector("dc/${destApp}").object() 
-                dc.spec.template.spec.containers[0].image="docker-registry/default.svc:5000/820a-tasks-dev/tasks:${prodtag}" 
+                dc.spec.template.spec.containers[0].image="docker-registry/default.svc:5000/${devProject}/tasks:${prodtag}" 
                 openshift.apply(dc)
                 openshift.selector("configmap", "${destApp}-config").delete()
                 def configmap = openshift.create("configmap", "${destApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties")
@@ -184,14 +187,14 @@ podTemplate(
         // Execute switch
         script{
           openshift.withCluster(){
-            openshift.withProject("820a-tasks-prod"){
+            openshift.withProject("${prodProject}"){
               def route = openshift.selector("route/tasks").object()
               route.spec.to.name = "${destApp}"
               openshift.apply(route)
             }
           }
         }
-      }*/
+      }
     }
   }
 }
