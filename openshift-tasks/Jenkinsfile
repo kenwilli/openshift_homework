@@ -159,7 +159,9 @@ podTemplate(
                 }
                 echo "Active Application:      " + activeApp
                 echo "Destination Application: " + destApp
-                def dc = openshift.selector("dc/${destApp}").object() dc.spec.template.spec.containers[0].image="docker-registry/default.svc:5000/820a-tasks-dev/tasks:${prodtag}" openshift.apply(dc)
+                def dc = openshift.selector("dc/${destApp}").object() 
+                dc.spec.template.spec.containers[0].image="docker-registry/default.svc:5000/820a-tasks-dev/tasks:${prodtag}" 
+                openshift.apply(dc)
                 openshift.selector("configmap", "${destApp}-config").delete()
                 def configmap = openshift.create("configmap", "${destApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties")
                 openshift.selector("dc", "${destApp}").rollout.latest()
