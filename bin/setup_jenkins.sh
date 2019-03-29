@@ -36,7 +36,10 @@ items:
     strategy:
       type: "JenkinsPipeline"
       jenkinsPipelineStrategy:
-        jenkinsfilePath: openshift-tasks/Jenkinsfile
+        jenkinsfilePath: openshift-tasks/Jenkinsfilev:
+        env:
+        - name: "GUID"
+          value: "820a"
 kind: List
 metadata: []" | oc create -f - -n ${GUID}-jenkins
 
