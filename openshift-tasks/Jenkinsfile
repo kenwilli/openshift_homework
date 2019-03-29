@@ -82,7 +82,7 @@ podTemplate(
         script{
           openshift.withCluster(){
             openshift.withProject("820a-tasks-dev"){
-              openshift.selector("bc", "tasks").startBuild("--from-file=http://nexus3.${gpte-hw-cicd-nexus.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/tasks/${version}/tasks-${version}.war", "--wait=true")
+              openshift.selector("bc", "tasks").startBuild("--from-file=http://nexus3.gpte-hw-cicd-nexus.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/tasks/${version}/tasks-${version}.war", "--wait=true")
               openshift.tag("tasks:latest", "tasks:${devTag}")
             }
           }
